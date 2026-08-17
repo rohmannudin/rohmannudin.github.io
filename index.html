@@ -1,14 +1,12 @@
-<!-- Chosen Palette: Emerald & Slate (Warna Natural Desa & Profesional) -->
-<!-- Application Structure Plan: Aplikasi Single Page Application (SPA) untuk administrasi hukum desa (Permendagri 47/2016). Dashboard dirancang dengan 4 kartu statistik utama (Perdes, Perkades, SK Kades, & Belum Dilaporkan) yang bertindak sebagai pintasan interaktif (click-to-navigate). Setiap kartu mengarahkan pengguna secara langsung ke tabel data terkait dengan filter tahun anggaran aktif dan filter bulan. Rencana navigasi dirancang intuitif untuk efisiensi alur kerja perangkat desa. -->
-<!-- Visualization & Content Choices: Menggunakan kartu UI Tailwind CSS dengan efek hover dan event listener JavaScript untuk navigasi instan antar halaman. Ikon FontAwesome (Canvas/Font-based) digunakan sebagai representasi visual tanpa SVG/Mermaid JS. -->
-<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
-
 <!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Desa Fajar Asri - Sistem Administrasi Hukum Desa</title>
+    <!-- Tambahan Library untuk Export PDF Langsung -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -40,10 +38,26 @@
         @media print {
             .no-print { display: none !important; }
             .print-only { display: block !important; }
-            body { background: white; overflow: auto; }
+            
+            /* OVERRIDE PEMBATAS TINGGI AGAR SEMUA HALAMAN TERCETAK (PAGINATION) */
+            html, body { height: auto !important; overflow: visible !important; background: white !important; display: block !important; }
+            body > div, main { height: auto !important; overflow: visible !important; display: block !important; }
+            .h-screen, .h-full, .overflow-hidden, .overflow-y-auto, .overflow-x-hidden, .flex-1, .custom-scrollbar {
+                height: auto !important; 
+                overflow: visible !important; 
+                flex: none !important; 
+                position: static !important;
+            }
+            .view-section { display: none; }
+            .view-section:not(.hidden) { display: block !important; height: auto !important; overflow: visible !important; }
+            
+            /* PENGATURAN TABEL CETAK */
             .print-table { width: 100%; border-collapse: collapse; }
             .print-table th, .print-table td { border: 1px solid black; padding: 8px; text-align: left; font-size: 12px; }
-            @page { size: landscape; margin: 10mm; }
+            .print-table tr { page-break-inside: avoid; } /* Hindari baris tabel terpotong di tengah halaman */
+            
+            /* Aturan default yang akan ditimpa oleh pengaturan dinamis nantinya */
+            @page { size: landscape; margin: 10mm; } 
         }
     </style>
 </head>
@@ -269,8 +283,12 @@
                         <button onclick="exportToExcel()" class="flex-1 sm:flex-none px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors shadow-sm flex items-center justify-center">
                             <i class="fas fa-file-excel mr-2"></i> <span class="hidden sm:inline">Export</span> Excel
                         </button>
-                        <button onclick="window.print()" class="flex-1 sm:flex-none px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center border shadow-sm">
-                            <i class="fas fa-print mr-2"></i> Cetak <span class="hidden sm:inline">PDF</span>
+                        <!-- TOMBOL BARU UNTUK UNDUH FILE PDF -->
+                        <button onclick="exportToPDF()" class="flex-1 sm:flex-none px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors shadow-sm flex items-center justify-center">
+                            <i class="fas fa-file-pdf mr-2"></i> Unduh <span class="hidden sm:inline">PDF</span>
+                        </button>
+                        <button onclick="openPrintModal()" class="flex-1 sm:flex-none px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center border shadow-sm">
+                            <i class="fas fa-print mr-2"></i> Cetak <span class="hidden sm:inline">Print</span>
                         </button>
                         <button id="btn-tambah-data" onclick="openModal()" class="w-full sm:w-auto px-4 py-2 bg-desa-600 text-white text-sm rounded-lg hover:bg-desa-700 transition-colors shadow-sm flex items-center justify-center">
                             <i class="fas fa-plus mr-2"></i> Tambah Data
@@ -578,6 +596,41 @@
         </div>
     </div>
 
+    <!-- MODAL PRINT OPTIONS (TAMBAHAN FITUR CETAK KUSTOM) -->
+    <div id="print-modal" class="fixed inset-0 bg-gray-900 bg-opacity-60 z-[70] hidden flex items-center justify-center no-print backdrop-blur-sm transition-opacity p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 transform transition-all">
+            <h3 class="text-xl font-bold text-gray-900 mb-4 flex items-center border-b pb-3">
+                <i class="fas fa-print text-gray-600 mr-3"></i> Pengaturan Cetak PDF
+            </h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ukuran Kertas</label>
+                    <select id="print-paper-size" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-desa-500 outline-none bg-gray-50 focus:bg-white">
+                        <option value="A4">A4 (210 x 297 mm)</option>
+                        <option value="F4">F4 / Folio (215.9 x 330.2 mm)</option>
+                        <option value="Legal">Legal (8.5 x 14 inch)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Orientasi Layout</label>
+                    <select id="print-orientation" class="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-desa-500 outline-none bg-gray-50 focus:bg-white">
+                        <option value="landscape">Landscape (Mendatar)</option>
+                        <option value="portrait">Portrait (Berdiri)</option>
+                    </select>
+                </div>
+                <div class="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 mt-2 leading-relaxed">
+                    <i class="fas fa-info-circle mr-1"></i> Setelah klik cetak, <strong>pastikan pengaturan pada dialog print browser</strong> menyesuaikan ukuran & orientasi ini agar hasil tabel rapi.
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t">
+                <button onclick="closePrintModal()" class="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium shadow-sm w-full">Batal</button>
+                <button onclick="executePrint()" class="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition shadow-sm font-medium w-full flex items-center justify-center">
+                    <i class="fas fa-check mr-2"></i> Tampilkan Print
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toast-container" class="fixed bottom-5 right-5 z-[80] flex flex-col gap-2 no-print pointer-events-none"></div>
 
@@ -857,7 +910,6 @@
                 
                 document.getElementById('page-title').textContent = title;
                 
-                // Set filter status pelaporan jika dipicu dari kartu "Belum Dilaporkan"
                 const filterLapor = document.getElementById('filter-lapor');
                 if(filterLapor) {
                     filterLapor.value = filterPendingOnly ? 'belum' : 'all';
@@ -872,7 +924,6 @@
             }
         }
 
-        // FUNGSI NAVIGASI KE DATA YANG BELUM DILAPORKAN
         function navigateToPending() {
             switchMenu('perdes', true);
             showToast('Menampilkan Peraturan Desa yang belum dilaporkan.', 'warning');
@@ -938,13 +989,41 @@
             if (file) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    const base64Str = e.target.result;
-                    document.getElementById('setting-app-logo').value = base64Str;
-                    
-                    document.getElementById('preview-icon-logo').classList.add('hidden');
-                    const imgPreview = document.getElementById('preview-img-logo');
-                    imgPreview.src = base64Str;
-                    imgPreview.classList.remove('hidden');
+                    // MENGKOMPRESI LOGO AGAR AMAN DISINKRONKAN KE SPREADSHEET (Mencegah Limit Karakter Cell)
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 200; // Maksimal lebar 200px (Sangat cukup untuk logo)
+                        const MAX_HEIGHT = 200; // Maksimal tinggi 200px
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const base64Str = canvas.toDataURL('image/png'); // Format PNG Terkompresi
+                        
+                        document.getElementById('setting-app-logo').value = base64Str;
+                        document.getElementById('preview-icon-logo').classList.add('hidden');
+                        const imgPreview = document.getElementById('preview-img-logo');
+                        imgPreview.src = base64Str;
+                        imgPreview.classList.remove('hidden');
+                    };
+                    img.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
             }
@@ -1492,6 +1571,54 @@
             }
         }
 
+        /* ==================== FITUR CETAK BARU ==================== */
+        function openPrintModal() {
+            document.getElementById('print-modal').classList.remove('hidden');
+        }
+
+        function closePrintModal() {
+            document.getElementById('print-modal').classList.add('hidden');
+        }
+
+        function executePrint() {
+            const size = document.getElementById('print-paper-size').value;
+            const orientation = document.getElementById('print-orientation').value;
+
+            // Cari atau buat elemen style khusus untuk cetak dinamis
+            let styleElement = document.getElementById('dynamic-print-style');
+            if (!styleElement) {
+                styleElement = document.createElement('style');
+                styleElement.id = 'dynamic-print-style';
+                document.head.appendChild(styleElement);
+            }
+
+            let rule = '';
+            // CSS @page memerlukan penulisan yang spesifik untuk ukuran non-standar seperti F4
+            if (size === 'F4') {
+                if (orientation === 'landscape') {
+                    // Lebar x Tinggi (Kertas Folio)
+                    rule = '@media print { @page { size: 330.2mm 215.9mm !important; margin: 10mm; } }';
+                } else {
+                    rule = '@media print { @page { size: 215.9mm 330.2mm !important; margin: 10mm; } }';
+                }
+            } else {
+                // A4 dan Legal dikenali secara native oleh banyak browser modern
+                rule = `@media print { @page { size: ${size} ${orientation} !important; margin: 10mm; } }`;
+            }
+
+            // Menyuntikkan aturan CSS yang baru menggantikan yang lama
+            styleElement.innerHTML = rule;
+            
+            // Tutup Modal
+            closePrintModal();
+            
+            // Berikan jeda waktu sesaat agar DOM merender CSS baru sebelum memanggil dialog print
+            setTimeout(() => {
+                window.print();
+            }, 300);
+        }
+        /* ========================================================= */
+
         function exportToExcel() {
             if (!db[currentMenu] || db[currentMenu].length === 0) {
                 return showToast("Tidak ada data untuk diekspor!", "error");
@@ -1578,6 +1705,118 @@
             document.body.removeChild(link);
             
             showToast('Dokumen Excel berhasil diunduh.', 'success');
+        }
+
+        /* ==================== FITUR UNDUH PDF LANGSUNG (JSPDF) ==================== */
+        function exportToPDF() {
+            if (!db[currentMenu] || db[currentMenu].length === 0) {
+                return showToast("Tidak ada data untuk diekspor ke PDF!", "error");
+            }
+
+            const searchTxt = document.getElementById('search-input').value.toLowerCase();
+            const filterLapor = document.getElementById('filter-lapor').value;
+            const filterBulan = document.getElementById('filter-bulan').value;
+
+            let filteredData = db[currentMenu].filter(item => {
+                const itemDate = new Date(item.tglTetap);
+                const itemYear = itemDate.getFullYear().toString();
+                if (itemYear !== selectedYear.toString()) return false;
+
+                const itemMonth = (itemDate.getMonth() + 1).toString().padStart(2, '0');
+                if (filterBulan !== 'all' && itemMonth !== filterBulan) return false;
+
+                const matchSearch = item.tentang.toLowerCase().includes(searchTxt) || item.noTetap.toLowerCase().includes(searchTxt);
+                let matchLapor = true;
+                if(filterLapor === 'lapor') matchLapor = item.tglLapor !== "";
+                if(filterLapor === 'belum') matchLapor = !item.tglLapor || item.tglLapor === "";
+
+                return matchSearch && matchLapor;
+            });
+
+            filteredData.sort((a, b) => a.noUrut - b.noUrut);
+            
+            if (filteredData.length === 0) {
+                return showToast("Tidak ada data yang sesuai dengan filter saat ini!", "error");
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape');
+            
+            let titleMenu = currentMenu === 'perdes' ? 'Buku Data Peraturan di Desa' : (currentMenu === 'skkades' ? 'Buku Data Keputusan Kepala Desa' : 'Buku Data Peraturan Kepala Desa');
+            
+            // KOP SURAT / HEADER PDF
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.text(db.settings.appTitle.toUpperCase(), 14, 20);
+            
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text(`${titleMenu.toUpperCase()} TAHUN ${selectedYear}`, 14, 27);
+            
+            // LOGO (Otomatis termuat dari Database jika bukan icon font)
+            const logoData = db.settings.appLogo;
+            if (logoData && logoData.startsWith('data:image')) {
+                try {
+                    // Logo di pojok kanan atas
+                    doc.addImage(logoData, 'PNG', 260, 10, 20, 20);
+                } catch(e) {
+                    console.log("Error loading image to PDF", e);
+                }
+            }
+
+            // GARIS PEMBATAS
+            doc.setLineWidth(0.5);
+            doc.line(14, 32, 283, 32);
+
+            let head = [];
+            let body = [];
+
+            if (currentMenu === 'perdes') {
+                head = [['No', 'Jenis', 'Nomor & Tgl Ditetapkan', 'Tentang', 'Tgl Kesepakatan BPD', 'Dilaporkan', 'Lembaran Desa', 'Berita Desa']];
+                body = filteredData.map(item => [
+                    item.noUrut,
+                    item.jenis,
+                    `${item.noTetap}\n(${formatTgl(item.tglTetap)})`,
+                    item.tentang,
+                    item.tglBPD ? `${item.noBPD || '-'}\n(${formatTgl(item.tglBPD)})` : "-",
+                    item.tglLapor ? `${item.noLapor || '-'}\n(${formatTgl(item.tglLapor)})` : "Belum",
+                    item.tglLembaran ? `${item.noLembaran || '-'}\n(${formatTgl(item.tglLembaran)})` : "-",
+                    item.tglBerita ? `${item.noBerita || '-'}\n(${formatTgl(item.tglBerita)})` : "-"
+                ]);
+            } else {
+                head = [['No', 'Nomor & Tgl Ditetapkan', 'Tentang', 'Uraian Singkat', 'Nomor & Tgl Dilaporkan', 'Keterangan']];
+                body = filteredData.map(item => [
+                    item.noUrut,
+                    `${item.noTetap}\n(${formatTgl(item.tglTetap)})`,
+                    item.tentang,
+                    item.uraian || "-",
+                    item.tglLapor ? `${item.noLapor || '-'}\n(${formatTgl(item.tglLapor)})` : "Belum",
+                    item.ket || "-"
+                ]);
+            }
+
+            // GENERATE TABEL OTOMATIS
+            doc.autoTable({
+                startY: 38,
+                head: head,
+                body: body,
+                theme: 'grid',
+                headStyles: { fillColor: [22, 163, 74], textColor: [255, 255, 255] },
+                styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak', valign: 'middle' },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 12 },
+                    3: { cellWidth: 70 } 
+                },
+                didDrawPage: function (data) {
+                    // Footer / Pagination
+                    doc.setFontSize(8);
+                    doc.text('Dicetak dari ' + db.settings.appTitle + ' - Halaman ' + doc.internal.getNumberOfPages(), data.settings.margin.left, doc.internal.pageSize.height - 10);
+                }
+            });
+
+            let monthLabel = filterBulan !== 'all' ? `_Bulan_${filterBulan}` : '';
+            doc.save(`Arsip_${titleMenu.replace(/\s+/g, '_')}_${selectedYear}${monthLabel}.pdf`);
+            showToast('Dokumen PDF berhasil dibuat dan diunduh.', 'success');
         }
 
         function setSyncUI(status) {
