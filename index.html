@@ -34,6 +34,7 @@
             }
         }
     </script>
+
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f7faf8; overflow: hidden; }
         * { -webkit-tap-highlight-color: transparent; }
@@ -94,7 +95,7 @@
         <p class="mt-4 font-semibold text-desa-700" id="loader-text">Memproses Data...</p>
     </div>
 
-    <!-- CUSTOM CONFIRMATION MODAL (No native confirm) -->
+    <!-- CUSTOM CONFIRMATION MODAL -->
     <div id="custom-confirm-modal" class="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[120] hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center border border-gray-100">
             <div class="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-3 text-lg">
@@ -125,7 +126,7 @@
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">Tahun Anggaran</label>
                         <select id="login-year" required class="w-full border-gray-200 bg-gray-50 rounded-xl px-4 py-3 focus:ring-2 focus:ring-desa-500 outline-none transition-all shadow-sm">
-                            <!-- Populated dynamically 2032 down to 2018 -->
+                            <!-- Populated dynamically -->
                         </select>
                     </div>
                     <div>
@@ -513,7 +514,7 @@
                                     <input type="text" id="input-no-lembaran" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-green-400 outline-none shadow-sm">
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-4">
+                            <div id="form-group-berita" class="grid grid-cols-2 gap-4 mt-4">
                                 <div>
                                     <label class="block text-xs font-semibold text-gray-600 mb-1">Tgl Berita Desa</label>
                                     <input type="date" id="input-tgl-berita" onchange="validateDateYear(this)" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-green-400 outline-none shadow-sm">
@@ -550,7 +551,7 @@
 
     <script>
         // MASUKKAN URL GOOGLE APPS SCRIPT WEB APP DI SINI
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAZ2GDpOajKT1TdjG8QQv_a9z7AtE_akaB-8Qr9hLI9QMor6H6KOhRrkbPzJsQnxc/exec'; 
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtvGcGFSE9mIwFQxuETSpqeeG4zojI0BiXmwLjvSdOL9JCwCs0DfV0r67Wsh763pgG/exec'; 
         
         let appData = { perdes: [], perkades: [], skkades: [] };
         let activeYear = null;
@@ -848,8 +849,8 @@
         function setupTableHeaders(menu) {
             document.getElementById('th-jenis').classList.toggle('hidden', menu !== 'perdes');
             document.getElementById('th-bpd').classList.toggle('hidden', menu === 'skkades');
-            document.getElementById('th-lembaran').classList.toggle('hidden', menu === 'skkades');
-            document.getElementById('th-berita').classList.remove('hidden');
+            document.getElementById('th-lembaran').classList.toggle('hidden', menu !== 'perdes');
+            document.getElementById('th-berita').classList.toggle('hidden', menu === 'skkades');
         }
 
         function renderTable() {
@@ -927,7 +928,7 @@
 
                 html += `<td class="py-3 px-3 whitespace-nowrap">${laporBadge}<div class="text-[10px] text-gray-400 mt-0.5">No: ${item.noLapor || '-'}</div></td>`;
 
-                if(currentMenu !== 'skkades') {
+                if(currentMenu === 'perdes') {
                     html += `
                         <td class="py-3 px-3 whitespace-nowrap">
                             <div class="font-semibold text-gray-700">${item.noLembaran || '-'}</div>
@@ -936,11 +937,16 @@
                     `;
                 }
 
+                if(currentMenu !== 'skkades') {
+                    html += `
+                        <td class="py-3 px-3 whitespace-nowrap">
+                            <div class="font-semibold text-gray-700">${item.noBerita || '-'}</div>
+                            <div class="text-[11px] text-gray-500 mt-0.5">${fmtDate(item.tglBerita)}</div>
+                        </td>
+                    `;
+                }
+
                 html += `
-                    <td class="py-3 px-3 whitespace-nowrap">
-                        <div class="font-semibold text-gray-700">${item.noBerita || '-'}</div>
-                        <div class="text-[11px] text-gray-500 mt-0.5">${fmtDate(item.tglBerita)}</div>
-                    </td>
                     <td class="py-3 px-3 text-center">${fileBtn}</td>
                     <td class="py-3 px-3 text-center no-print col-aksi">
                         <div class="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -976,7 +982,8 @@
 
             document.getElementById('form-group-jenis-perdes').classList.toggle('hidden', currentMenu !== 'perdes');
             document.getElementById('form-group-bpd').classList.toggle('hidden', currentMenu === 'skkades');
-            document.getElementById('form-group-lembaran').classList.toggle('hidden', currentMenu === 'skkades');
+            document.getElementById('form-group-lembaran').classList.toggle('hidden', currentMenu !== 'perdes');
+            document.getElementById('form-group-berita').classList.toggle('hidden', currentMenu === 'skkades');
 
             if(id) {
                 const item = appData[currentMenu].find(d => d.id === id);
@@ -1058,10 +1065,10 @@
                 noBpd: currentMenu !== 'skkades' ? document.getElementById('input-no-bpd').value : '',
                 tglLapor: document.getElementById('input-tgl-lapor').value,
                 noLapor: document.getElementById('input-no-lapor').value,
-                tglLembaran: currentMenu !== 'skkades' ? document.getElementById('input-tgl-lembaran').value : '',
-                noLembaran: currentMenu !== 'skkades' ? document.getElementById('input-no-lembaran').value : '',
-                tglBerita: document.getElementById('input-tgl-berita').value,
-                noBerita: document.getElementById('input-no-berita').value,
+                tglLembaran: currentMenu === 'perdes' ? document.getElementById('input-tgl-lembaran').value : '',
+                noLembaran: currentMenu === 'perdes' ? document.getElementById('input-no-lembaran').value : '',
+                tglBerita: currentMenu !== 'skkades' ? document.getElementById('input-tgl-berita').value : '',
+                noBerita: currentMenu !== 'skkades' ? document.getElementById('input-no-berita').value : '',
                 fileUrl: document.getElementById('form-file-url').value
             };
 
@@ -1145,17 +1152,40 @@
 
         function exportToExcel() {
             const wb = XLSX.utils.book_new();
-            const dataToExport = appData[currentMenu].map((item, index) => ({
-                "No": index + 1,
-                "Nomor Penetapan": item.noTetap,
-                "Tanggal Penetapan": item.tglTetap,
-                "Tentang": item.tentang,
-                "Uraian": item.uraian,
-                "Nomor BPD": item.noBpd || '',
-                "Tanggal BPD": item.tglBpd || '',
-                "Nomor Lapor": item.noLapor || '',
-                "Tanggal Lapor": item.tglLapor || ''
-            }));
+            const dataToExport = appData[currentMenu].map((item, index) => {
+                let row = {
+                    "No": index + 1
+                };
+                
+                if (currentMenu === 'perdes') {
+                    row["Jenis"] = item.jenis || 'Peraturan Desa';
+                }
+
+                row["Nomor Penetapan"] = item.noTetap || '';
+                row["Tanggal Penetapan"] = item.tglTetap || '';
+                row["Tentang"] = item.tentang || '';
+                row["Uraian"] = item.uraian || '';
+
+                if (currentMenu !== 'skkades') {
+                    row["Nomor BPD"] = item.noBpd || '';
+                    row["Tanggal BPD"] = item.tglBpd || '';
+                }
+
+                row["Nomor Lapor"] = item.noLapor || '';
+                row["Tanggal Lapor"] = item.tglLapor || '';
+                
+                if (currentMenu === 'perdes') {
+                    row["Nomor Lembaran Desa"] = item.noLembaran || '';
+                    row["Tanggal Lembaran Desa"] = item.tglLembaran || '';
+                }
+
+                if (currentMenu !== 'skkades') {
+                    row["Nomor Berita Desa"] = item.noBerita || '';
+                    row["Tanggal Berita Desa"] = item.tglBerita || '';
+                }
+
+                return row;
+            });
 
             const ws = XLSX.utils.json_to_sheet(dataToExport);
             XLSX.utils.book_append_sheet(wb, ws, "Data");
